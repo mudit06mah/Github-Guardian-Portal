@@ -52,6 +52,7 @@ export default function SettingsPage() {
       if (response.ok) {
         const data = await response.json()
         setGithubStatus(data)
+        console.log("GitHub Status:", data)
       }
     } catch (error) {
       console.error("[v0] Error fetching GitHub status:", error)

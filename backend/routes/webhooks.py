@@ -163,6 +163,11 @@ async def handle_workflow_run_event(payload: dict, db: Session):
     workflow_path = payload.get("workflow", {}).get("path")
     workflow_run = payload.get("workflow_run", {})
     installation_id = payload.get("installation", {}).get("id")
+
+    head_sha = workflow_run.get("head_sha") # <--- This is the version of code that actually ran
+
+    if not repo_full_name or not installation_id or not workflow_path:
+        return
     
     if not repo_full_name or not installation_id or not workflow_path:
         logger.warning("[v0] Workflow run event missing required fields")
@@ -201,8 +206,13 @@ async def handle_workflow_run_event(payload: dict, db: Session):
         # Scan workflow for security issues
         github_service = GitHubService(installation.access_token, is_app_token=True)
         owner, repo_name = repo_full_name.split("/")
+
+        workflow_content = await github_service.get_workflow_file(
+            owner, repo_name, workflow_path, ref=head_sha
+        )
         
         workflow_content = await github_service.get_workflow_file(owner, repo_name, workflow_path)
+
         if workflow_content:
             findings = WorkflowScanner.scan_workflow(workflow_content, workflow_path)
             
@@ -241,8 +251,10 @@ async def handle_pull_request_event(payload: dict, db: Session):
     installation_id = payload.get("installation", {}).get("id")
     pr_number = payload.get("number")
     
-    # Only scan when PR is opened or synchronized (new commits)
-    if pr_action not in ["opened", "synchronize"]:
+    pull_request = payload.get("pull_request", {})
+    head_sha = pull_request.get("head", {}).get("sha")
+
+    if pr_action not in ["opened", "synchronize", "reopened"]:
         return
     
     if not repo_full_name or not installation_id:
@@ -284,27 +296,37 @@ async def handle_pull_request_event(payload: dict, db: Session):
         owner, repo_name = repo_full_name.split("/")
         
         workflows = await github_service.get_workflows(owner, repo_name)
-        
+
         for workflow in workflows:
+            # 3. FETCH CONTENT FROM THE PR SHA
             workflow_content = await github_service.get_workflow_file(
-                owner, repo_name, workflow["path"]
+                owner, repo_name, workflow["path"], ref=head_sha
             )
             
             if workflow_content:
                 findings = WorkflowScanner.scan_workflow(workflow_content, workflow["path"])
                 
                 for finding in findings:
-                    # Create PR-specific incidents
-                    incident = Incident(
-                        repo_id=repo.id,
-                        pr_number=pr_number,
-                        workflow_path=workflow["path"],
-                        severity=finding["severity"],
-                        finding_type=finding["type"],
-                        description=finding["description"],
-                        status="Open"
-                    )
-                    db.add(incident)
+                    # Check if incident exists for this PR specifically
+                    existing = db.query(Incident).filter(
+                        Incident.repo_id == repo.id,
+                        Incident.pr_number == pr_number, # Scope to PR
+                        Incident.workflow_path == workflow["path"],
+                        Incident.finding_type == finding["type"]
+                    ).first()
+
+                    if not existing:
+                        incident = Incident(
+                            repo_id=repo.id,
+                            pr_number=pr_number,
+                            workflow_path=workflow["path"],
+                            severity=finding["severity"],
+                            finding_type=finding["type"],
+                            description=finding["description"],
+                            status="Open"
+                        )
+                        db.add(incident)
+                        logger.info(f"[v0] Found PR Incident: {finding['type']}")
         
         db.commit()
         logger.info(f"[v0] Completed PR scan for {repo_full_name} PR #{pr_number}")

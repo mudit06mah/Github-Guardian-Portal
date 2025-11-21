@@ -61,15 +61,20 @@ class GitHubService:
             logger.error(f"[v0] Error fetching workflows for {owner}/{repo}: {str(e)}")
             return []
     
-    async def get_workflow_file(self, owner: str, repo: str, workflow_path: str) -> Optional[str]:
+    async def get_workflow_file(self, owner: str, repo: str, workflow_path: str, ref: str = None) -> Optional[str]:
         """Fetch workflow YAML file content"""
         try:
             async with httpx.AsyncClient() as client:
+                # Use the content API which supports ?ref=...
                 url = f"{self.base_url}/repos/{owner}/{repo}/contents/{workflow_path}"
-                response = await client.get(url, headers=self.headers, timeout=10.0)
+                params = {}
+                if ref:
+                    params["ref"] = ref
+                
+                response = await client.get(url, headers=self.headers, params=params, timeout=10.0)
                 
                 if response.status_code == 404:
-                    logger.warning(f"[v0] Workflow file {workflow_path} not found")
+                    logger.warning(f"[v0] Workflow file {workflow_path} not found at ref {ref}")
                     return None
                 
                 response.raise_for_status()

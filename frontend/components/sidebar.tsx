@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Shield, Home, AlertCircle, GitBranch, Settings, LogOut, Menu, X } from "lucide-react"
-import ThemeToggle from "./theme-toggle"
+import ThemeToggle from "@/components/theme-toggle"
 
 interface SidebarProps {
   user: {
