@@ -1,6 +1,7 @@
-'use client'
+"use client"
 
-import { Search, Bell } from 'lucide-react'
+import { Search } from "lucide-react"
+import { useState } from "react"
 
 interface DashboardHeaderProps {
   user: {
@@ -9,6 +10,8 @@ interface DashboardHeaderProps {
 }
 
 export default function DashboardHeader({ user }: DashboardHeaderProps) {
+  const [searchQuery, setSearchQuery] = useState("")
+
   return (
     <div className="space-y-4">
       {/* Welcome Section */}
@@ -19,12 +22,13 @@ export default function DashboardHeader({ user }: DashboardHeaderProps) {
         <p className="text-text-secondary">Welcome back to your security dashboard</p>
       </div>
 
-      {/* Search Bar */}
-      <div className="flex items-center gap-2 bg-surface border border-border rounded px-4 py-2 max-w-md">
-        <Search size={18} className="text-text-secondary" />
+      <div className="flex items-center gap-2 bg-surface border border-border rounded-lg px-4 py-3 max-w-md hover:border-accent/50 transition-colors group">
+        <Search size={18} className="text-text-secondary group-hover:text-accent transition-colors" />
         <input
           type="text"
           placeholder="Search repositories or incidents..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="bg-transparent flex-1 outline-none text-text-primary placeholder:text-text-secondary"
         />
       </div>

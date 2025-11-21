@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: github_guardian_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: hello_kitty
+      POSTGRES_DB: github_guardian_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: github_guardian_backend
+    environment:
+      DATABASE_URL: "postgresql://postgres:hello_kitty@db:5432/github_guardian_db"
+      GITHUB_WEBHOOK_SECRET: super_secret_918273645_random_key
+      GITHUB_APP_ID: 2325948
+      GITHUB_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAtEt+KTSn5ETGVPyMvSK4Kl/JvgPZ0x8Iiy0m1/3cBKwDEwuh\ngz+5zMPs6ZbphfHI+5R9YomUetZStF07PCIlo/wwXQ5A42gK/QIHzLPVzdi/aCIG\nVDVtA+ZKQGU3B/67SivKNnBvl0flIP/GPFyhT3/4CrqnD/SO41mr1jjsjzRDpH4u\nv9/j/crApGdQUPBW4RVVVYfgqu2APSaoh+t33Tl9xAml1Zr53q6brsh2ZVdxfWAN\noPI765iiGM8AFNOKOZppJ5RxYRU8YuL2fUv3iT2mqAQhcjr+juVs4rvUyyyIYJ+B\nMOP16FrLREO6TKPaOyk0QrYDBI5OoTk/fomJDwIDAQABAoIBAQCuJAyjOBzBujvm\nclhthk9jfkmZopaN+HeEFgRisuwEBzChAKbr4m1Pfh4iMIU1vqdld7Lzrfcf/kq7\nsyE3n7PDhB4ig1XhT+jtHzzxVvG3dRbLObHrO/8juRcWw6w3qK61oT4a/taJxANn\nsCSEwON9qhimJEqgepJYvY/fxfOXDD/aBRDEWBLcBwa3IuEs17dZrcjChR/ISRGA\nupPn+TGtznJR0PACUq6H0J+cjdjc/pAQkutP0RBo5oIKzuc7s1CXJE8iTiNMNAd8\nR4NiZUwAczOXwY+vlv/C9B4rpnW+CNBpLc1j0EtcUGxQzBIDHqlT/aM7UBnIsecH\nsvRLRnnhAoGBAOgJGsvoq5x+RpfJoAs71Hf4zzHNV2VR3eVFN+O2zHlK92wHcTfg\nzNrlt73nkpDEPkP/7xC6cBuhAGuHqar1UmxVFQGEiA1Vrz396dbKUWoxMCexON9w\n7BriSV6ubyrQop+l8P8sHch/7zPIW0t6w5nxcEoXfk4BRFx2sPNXLipLAoGBAMbq\nZIX8x6Nh+DOrEPA4KSKR3k4sVEGCeHDaR7DcQzU4lr0lfVut6C23PaiuQoJfTx+d\nGo4TzV040gzK9VftZOMH8ekXIQKJYxlswh+klBgJtgbvdg5hPiH2t3RlGkyvLRu6\nH2mZ4uUP6snWf0mh4FSH4New38fvx95LXRKemiHNAoGAf/11sIB5GOt2mQd4pnms\nKzktYPU5fgP4eB0ERTFx/H3jmM1KIF554UzRW4k/CWeWSQAFqJ6OdE8M4kOEzW5g\ntqz/10R5n5FiBrnmoLocyoyzWVGiY23wbqvfeMCTRXSsH4/zLW3yR8R594BPC4V+\nG45YOCZZX0HHqZE27iNqrZ0CgYADS9MKnVu5i2APiyAmuueDmSMz7GwhAcZ5KETT\n23KJqTxmOf7PzBvy1fyBlRGpE2c+QN41yII4rz5b0+ko4dgwIuuRTz7OyfQIcdLt\nr05873xCtSkhp97dtTbpCNvctXJr6TOoDlLCNPdRDOrjD3mmLPI+4MF0kLahKmKK\ncnJfaQKBgQC3gKthTxV/zjt/sb+xWhfdhNqWnIP2cHVSmFJPvxzYv9HDEmAimxkP\nuhZftn3tNormWIPDgy6umF8wCzBqkew3HgYamDjtTU4g+JWPBSLGvypAzIVM6z8Q\n9YW2TOqHK9j7LLy7842tdL2jbkCYjlD3xX/JHVP7vqvkgvlBQNy9sg==\n-----END RSA PRIVATE KEY-----\n"
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: github_guardian_frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/.next
+    command: npm run dev
+
+volumes:
+  postgres_data:

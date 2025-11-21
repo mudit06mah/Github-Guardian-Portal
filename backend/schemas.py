@@ -4,14 +4,19 @@ from datetime import datetime
 
 # User Schemas
 class UserCreate(BaseModel):
-    github_username: str
     email: EmailStr
-    api_token: str
+    password: Optional[str] = None
+    github_username: Optional[str] = None
+    api_token: Optional[str] = None
+
+class UserLoginPassword(BaseModel):
+    email: EmailStr
+    password: str
 
 class UserResponse(BaseModel):
     id: str
-    github_username: str
     email: str
+    github_username: Optional[str]
     created_at: datetime
     
     class Config:
