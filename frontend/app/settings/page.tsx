@@ -15,8 +15,8 @@ interface User {
 
 interface GitHubInstallation {
   app_installed: boolean
-  installation_id: number | null
-  token_expires_at: string | null
+  installation_id?: number
+  token_expires_at?: string
 }
 
 export default function SettingsPage() {
@@ -48,7 +48,13 @@ export default function SettingsPage() {
 
   const fetchGitHubStatus = async (userId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/auth/github/app-status/${userId}`)
+      const token = localStorage.getItem("token")
+      const response = await fetch(
+        `http://localhost:8000/api/auth/github/app-status/${userId}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      )
       if (response.ok) {
         const data = await response.json()
         setGithubStatus(data)
@@ -76,16 +82,18 @@ export default function SettingsPage() {
 
     try {
       const token = localStorage.getItem("token")
-      const response = await fetch(`http://localhost:8000/api/auth/github/refresh-token/${currentUser.id}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const response = await fetch(
+        `http://localhost:8000/api/auth/github/refresh-token/${currentUser.id}`,
+        {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      )
 
       if (response.ok) {
-        const data = await response.json()
         toast({
           title: "Success",
-          description: `Token ${data.status === "refreshed" ? "refreshed" : "is still valid"}`,
+          description: "Token refreshed successfully",
         })
         fetchGitHubStatus(currentUser.id)
       }
@@ -165,14 +173,20 @@ export default function SettingsPage() {
                   <Shield size={20} className="text-green-500" />
                   <div className="flex-1">
                     <p className="font-medium text-foreground">GitHub App Connected</p>
-                    <p className="text-sm text-muted-foreground">Installation ID: {githubStatus.installation_id}</p>
+                    {githubStatus.installation_id && (
+                      <p className="text-sm text-muted-foreground">
+                        Installation ID: {githubStatus.installation_id}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 {githubStatus.token_expires_at && (
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Token Expires</label>
-                    <p className="text-foreground mt-1">{new Date(githubStatus.token_expires_at).toLocaleString()}</p>
+                    <p className="text-foreground mt-1">
+                      {new Date(githubStatus.token_expires_at).toLocaleString()}
+                    </p>
                   </div>
                 )}
 
@@ -180,15 +194,20 @@ export default function SettingsPage() {
                   <Button onClick={handleRefreshToken} variant="outline">
                     Refresh Token
                   </Button>
-                  <Button
-                    onClick={() =>
-                      window.open(`https://github.com/settings/installations/${githubStatus.installation_id}`, "_blank")
-                    }
-                    variant="outline"
-                  >
-                    <ExternalLink size={16} className="mr-2" />
-                    Manage on GitHub
-                  </Button>
+                  {githubStatus.installation_id && (
+                    <Button
+                      onClick={() =>
+                        window.open(
+                          `https://github.com/settings/installations/${githubStatus.installation_id}`,
+                          "_blank"
+                        )
+                      }
+                      variant="outline"
+                    >
+                      <ExternalLink size={16} className="mr-2" />
+                      Manage on GitHub
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : (

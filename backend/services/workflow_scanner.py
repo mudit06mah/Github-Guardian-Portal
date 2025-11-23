@@ -43,26 +43,59 @@ class WorkflowScanner:
     
     @classmethod
     def scan_workflow(cls, workflow_content: str, workflow_path: str) -> List[Dict[str, Any]]:
-        """Scan workflow content for security issues"""
         findings = []
-        
         if not workflow_content:
             return findings
-        
+
+        # 1. Traditional Regex Scanning (Fast, catches simple one-liners)
         for pattern_name, pattern_info in cls.SECURITY_PATTERNS.items():
             matches = re.finditer(pattern_info["pattern"], workflow_content, re.IGNORECASE | re.MULTILINE)
-            
             for match in matches:
-                line_number = workflow_content[:match.start()].count('\n') + 1
                 findings.append({
                     "type": pattern_name,
                     "severity": pattern_info["severity"],
                     "description": pattern_info["description"],
-                    "line": line_number,
-                    "matched_text": match.group(0)[:100],
+                    "line": workflow_content[:match.start()].count('\n') + 1,
+                    "matched_text": match.group(0).strip(),
                     "workflow_path": workflow_path
                 })
+
+        # 2. Deep YAML Parsing (Captures full code blocks for Sandboxing)
+        try:
+            yaml_data = yaml.safe_load(workflow_content)
+            findings.extend(cls._scan_yaml_structure(yaml_data, workflow_path))
+        except yaml.YAMLError:
+            logger.warning(f"Failed to parse YAML for {workflow_path}, skipping deep scan.")
+
+        return findings
+
+    @classmethod
+    def _scan_yaml_structure(cls, data: Any, path: str) -> List[Dict[str, Any]]:
+        """Recursively search YAML for 'run' steps"""
+        findings = []
         
+        if isinstance(data, dict):
+            # Check if this dict is a "step" with a "run" command
+            if "run" in data and isinstance(data["run"], str):
+                script = data["run"]
+                # Check if this script looks suspicious (simple check)
+                if "curl" in script or "wget" in script or "python" in script:
+                    findings.append({
+                        "type": "suspicious_code_block", # Special type for Sandbox
+                        "severity": "Medium",
+                        "description": "Suspicious code block detected (Candidate for Sandbox)",
+                        "line": 0, # YAML parser doesn't give line numbers easily
+                        "matched_text": script.strip(), # Capture the FULL script
+                        "workflow_path": path
+                    })
+            
+            for key, value in data.items():
+                findings.extend(cls._scan_yaml_structure(value, path))
+        
+        elif isinstance(data, list):
+            for item in data:
+                findings.extend(cls._scan_yaml_structure(item, path))
+                
         return findings
     
     @classmethod

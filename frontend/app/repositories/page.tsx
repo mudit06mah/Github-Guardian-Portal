@@ -203,7 +203,11 @@ export default function RepositoriesPage() {
                 </Button>
               </div>
               <div className="grid gap-3 max-h-96 overflow-y-auto">
-                {filteredAvailable.length === 0 ? (
+                {isLoadingAvailable ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredAvailable.length === 0 ? (
                   <p className="text-center py-8 text-muted-foreground">No repositories found</p>
                 ) : (
                   filteredAvailable.map((repo) => (
@@ -258,7 +262,19 @@ export default function RepositoriesPage() {
               <div className="text-center py-12 bg-card border border-border rounded-lg">
                 <GitBranch size={48} className="mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground mb-2">No repositories tracked yet</p>
-                <p className="text-sm text-muted-foreground">Click "Browse Available" to start tracking repositories</p>
+                <p className="text-sm text-muted-foreground mb-4">Click "Browse Available" to start tracking repositories</p>
+                <Button
+                  onClick={fetchAvailableRepositories}
+                  disabled={isLoadingAvailable}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {isLoadingAvailable ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="mr-2 h-4 w-4" />
+                  )}
+                  Browse Available Repositories
+                </Button>
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
