@@ -242,11 +242,12 @@ async def handle_pull_request_event(payload: dict, db: Session):
     pr_action = payload.get("action")
     repo_full_name = payload.get("repository", {}).get("full_name")
     installation_id = payload.get("installation", {}).get("id")
-    pr_number = payload.get("pull_request", {}).get("number")
+    pr_number = payload.get("number")
     
+    # 1. GET THE SHA (The specific version of code in this PR)
     pull_request = payload.get("pull_request", {})
     head_sha = pull_request.get("head", {}).get("sha")
-
+    
     if pr_action not in ["opened", "synchronize", "reopened"]:
         logger.info(f"[v0] Skipping PR action: {pr_action}")
         return
@@ -254,16 +255,12 @@ async def handle_pull_request_event(payload: dict, db: Session):
     if not repo_full_name or not installation_id:
         logger.warning("[v0] Pull request event missing required fields")
         return
-    
-    logger.info(f"[v0] Pull request {pr_action} event for {repo_full_name} PR #{pr_number}, SHA: {head_sha}")
-    
-    # Check if repo is tracked
+
     repo = db.query(Repository).filter(Repository.full_name == repo_full_name).first()
     if not repo:
         logger.info(f"[v0] Repository {repo_full_name} not tracked, skipping")
         return
-    
-    # Get installation
+
     installation = db.query(GitHubInstallation).filter(
         GitHubInstallation.installation_id == installation_id
     ).first()
@@ -272,29 +269,21 @@ async def handle_pull_request_event(payload: dict, db: Session):
         logger.error(f"[v0] Installation {installation_id} not found")
         return
     
-    # Refresh token if needed
     github_app = GitHubAppAuth()
     token_data = await github_app.refresh_installation_token_if_needed(
         installation.installation_id,
         installation.access_token,
         installation.token_expires_at
     )
-    
-    if token_data and token_data["token"] != installation.access_token:
-        installation.access_token = token_data["token"]
-        installation.token_expires_at = datetime.fromisoformat(token_data["expires_at"].replace("Z", "+00:00"))
-        db.commit()
-    
+
     try:
-        # Scan all workflows in the repo at the PR's commit
-        github_service = GitHubService(installation.access_token, is_app_token=True)
+        github_service = GitHubService(token_data["token"], is_app_token=True)
         owner, repo_name = repo_full_name.split("/")
         
         workflows = await github_service.get_workflows(owner, repo_name)
-        logger.info(f"[v0] Found {len(workflows)} workflows to scan for PR #{pr_number}")
-
+        
         for workflow in workflows:
-            # FETCH CONTENT FROM THE PR SHA (the actual code in the PR)
+            # 2. PASS THE SHA HERE (ref=head_sha)
             workflow_content = await github_service.get_workflow_file(
                 owner, repo_name, workflow["path"], ref=head_sha
             )
@@ -304,15 +293,14 @@ async def handle_pull_request_event(payload: dict, db: Session):
                 logger.info(f"[v0] Found {len(findings)} issues in {workflow['path']} for PR #{pr_number}")
                 
                 for finding in findings:
-                    # Check if incident exists for this PR specifically
+                    # Check duplicates scoped to this PR
                     existing = db.query(Incident).filter(
                         Incident.repo_id == repo.id,
                         Incident.pr_number == pr_number,
                         Incident.workflow_path == workflow["path"],
-                        Incident.finding_type == finding["type"],
-                        Incident.status != "Resolved"
+                        Incident.finding_type == finding["type"]
                     ).first()
-
+                    
                     if not existing:
                         incident = Incident(
                             repo_id=repo.id,
@@ -324,7 +312,7 @@ async def handle_pull_request_event(payload: dict, db: Session):
                             status="Open"
                         )
                         db.add(incident)
-                        logger.info(f"[v0] Created PR incident: {finding['type']} in {workflow['path']}")
+                        logger.info(f"[v0] Created PR Incident: {finding['type']}")
         
         db.commit()
         logger.info(f"[v0] Completed PR scan for {repo_full_name} PR #{pr_number}")
