@@ -346,9 +346,6 @@ Database schema is automatically created on backend startup. For manual migratio
 # Connect to database
 psql $DATABASE_URL
 
-# View tables
-\dt
-\`\`\`
 
 ## Troubleshooting
 
