@@ -59,7 +59,7 @@ cd github-guardian
 
 # Configure environment
 cp .env.example .env
-# Edit .env and add your GitHub API token
+# Edit .env & add your GitHub API token
 
 # Start services
 docker-compose up -d
