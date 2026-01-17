@@ -9,6 +9,8 @@
 
 GitHub Guardian is an enterprise-grade security monitoring platform for GitHub CI/CD workflows. It automatically scans GitHub Actions workflows for security vulnerabilities, provides incident tracking, and enables safe code execution in isolated sandboxes.
 
+### [Action Bot](https://github.com/mudit06mah/Github-Guardian)
+
 ### Key Features
 
 ✨ **Security Scanning**
